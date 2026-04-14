@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase/config';
 import { collection, query, getDocs } from 'firebase/firestore';
-import { BookOpen, Calendar as CalendarIcon, Bell, Clock, MapPin, Maximize2, Info, Eye } from 'lucide-react';
+import { BookOpen, Calendar as CalendarIcon, Bell, Clock, MapPin, Maximize2, Info, Eye, X } from 'lucide-react';
 
 export default function StudentDashboard() {
   const { userData } = useAuth();
-  const [timetable, setTimetable] = useState({ today: [], tomorrow: [], dayAfter: [] });
+  const [timetable, setTimetable] = useState({ today: [], tomorrow: [], dayAfter: [], todayName: '', tmrwName: '', datName: '' });
+  const [fullTt, setFullTt] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [showFullTt, setShowFullTt] = useState(false);
   const [assignments, setAssignments] = useState([]);
   const [events, setEvents] = useState({ academic: [], slideEvents: [] });
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -80,10 +83,19 @@ export default function StudentDashboard() {
         const relevantAssgs = isAdmin ? allAssgs : allAssgs.filter(a => mySections.includes(`${a.courseLink}:${a.sectionLink}`));
         setAssignments(relevantAssgs);
 
-        // --- 3. Fetch Timetable & group into 3 Days ---
-        const snapshotTimetable = await getDocs(collection(db, 'timetable'));
+        // --- 3. Fetch Timetable & Slots ---
+        const [snapshotTimetable, snapshotSlots] = await Promise.all([
+          getDocs(collection(db, 'timetable')),
+          getDocs(collection(db, 'timeSlots'))
+        ]);
+
         const allTt = snapshotTimetable.docs.map(d => ({ id: d.id, ...d.data() }));
         const myTt = isAdmin ? allTt : allTt.filter(t => mySections.includes(`${t.courseLink}:${t.sectionLink}`));
+        setFullTt(myTt);
+
+        const allSlots = snapshotSlots.docs.map(d => ({ id: d.id, ...d.data() }));
+        allSlots.sort((a,b) => (a.start || '').localeCompare(b.start || ''));
+        setTimeSlots(allSlots);
 
         const todayVal = new Date();
         const tmrwVal = new Date(); tmrwVal.setDate(tmrwVal.getDate()+1);
@@ -292,17 +304,28 @@ export default function StudentDashboard() {
         
         {/* Timetable spanning 2 cols */}
         <section className="lg:col-span-2">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-              <CalendarIcon className="h-6 w-6" />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                <CalendarIcon className="h-6 w-6" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Upcoming Schedule</h2>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Upcoming Schedule</h2>
+            <button 
+              onClick={() => setShowFullTt(true)}
+              className="text-sm font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group"
+            >
+              View Full Weekly Schedule <Maximize2 className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+            </button>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Day 1 */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-              <div className="p-4 bg-indigo-50/50 border-b border-indigo-100 text-center">
+            <div 
+              onClick={() => setShowFullTt(true)}
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col cursor-pointer transition hover:border-indigo-200 hover:shadow-md group"
+            >
+              <div className="p-4 bg-indigo-50/50 border-b border-indigo-100 text-center group-hover:bg-indigo-100/50">
                 <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">Today</span>
                 <p className="text-sm text-gray-500">{timetable.todayName}</p>
               </div>
@@ -314,8 +337,11 @@ export default function StudentDashboard() {
             </div>
 
             {/* Day 2 */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col opacity-90">
-              <div className="p-4 bg-gray-50/50 border-b border-gray-100 text-center">
+            <div 
+              onClick={() => setShowFullTt(true)}
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col opacity-90 cursor-pointer transition hover:border-indigo-200 hover:shadow-md group"
+            >
+              <div className="p-4 bg-gray-50/50 border-b border-gray-100 text-center group-hover:bg-gray-100">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-600">Tomorrow</span>
                 <p className="text-sm text-gray-500">{timetable.tmrwName}</p>
               </div>
@@ -327,8 +353,11 @@ export default function StudentDashboard() {
             </div>
 
             {/* Day 3 */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col opacity-75">
-              <div className="p-4 bg-gray-50/50 border-b border-gray-100 text-center">
+            <div 
+              onClick={() => setShowFullTt(true)}
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col opacity-75 cursor-pointer transition hover:border-indigo-200 hover:shadow-md group"
+            >
+              <div className="p-4 bg-gray-50/50 border-b border-gray-100 text-center group-hover:bg-gray-100">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-600">Day After</span>
                 <p className="text-sm text-gray-500">{timetable.datName}</p>
               </div>
@@ -462,6 +491,134 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
+      {/* Full Weekly Timetable Modal */}
+      {showFullTt && (
+        <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 lg:p-12 animate-in fade-in zoom-in duration-300">
+          <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-xl" onClick={() => setShowFullTt(false)} />
+          
+          <div className="relative w-full max-w-7xl max-h-[95vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col pointer-events-auto">
+            <div className="p-6 md:p-8 bg-indigo-600 text-white flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-2xl font-bold">Your Weekly Schedule</h3>
+                <p className="text-indigo-100 text-sm mt-1 flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> Comprehensive view of all your sections
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowFullTt(false)}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 md:p-10">
+               <StudentTimetableGrid items={fullTt} definedSlots={timeSlots} />
+            </div>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-center text-gray-400 text-xs gap-6 shrink-0">
+               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-indigo-500" /> Regular Class</div>
+               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /> Special Event</div>
+               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-teal-500" /> Date-Specific</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentTimetableGrid({ items, definedSlots = [] }) {
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const todayName = DAY_NAMES[new Date().getDay()];
+
+  const toMin = (s) => {
+    if(!s) return 0;
+    const [h, m] = s.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const isOverlapping = (start1, end1, start2, end2) => {
+    return toMin(start1) < toMin(end2) && toMin(end1) > toMin(start2);
+  };
+
+  const normalised = items.map(t => {
+    if (t.date) {
+      const [y, m, d] = t.date.split('-').map(Number);
+      const dayIdx = new Date(y, m - 1, d, 12).getDay();
+      return { ...t, resolvedDay: DAY_NAMES[dayIdx] };
+    }
+    return { ...t, resolvedDay: t.dayOfWeek };
+  });
+
+  const headerSlots = [...definedSlots].sort((a, b) => a.start.localeCompare(b.start));
+
+  if (headerSlots.length === 0 && !items.length) {
+    return <p className="text-gray-400 text-sm text-center py-20">No schedule data available.</p>;
+  }
+
+  const lookup = {};
+  for (const t of normalised) {
+    const key = t.resolvedDay;
+    if (!lookup[key]) lookup[key] = {};
+    headerSlots.forEach(slot => {
+      const matchesSlot = (t.slotLabel === slot.label && t.eventType === 'class') || 
+                          isOverlapping(t.timeStart, t.timeEnd, slot.start, slot.end);
+      if (matchesSlot) {
+        if (!lookup[key][slot.id]) lookup[key][slot.id] = [];
+        lookup[key][slot.id].push(t);
+      }
+    });
+  }
+
+  return (
+    <div className="min-w-[800px]">
+      <div className="grid grid-cols-[140px_repeat(auto-fit,minmax(150px,1fr))] border-b border-gray-100">
+        <div className="p-4 bg-gray-50 border-r border-gray-100 font-bold text-gray-400 text-xs uppercase tracking-widest">Day \ Slot</div>
+        {headerSlots.map(slot => (
+          <div key={slot.id} className={`p-4 text-center border-r border-gray-100 last:border-0 ${slot.isBreak ? 'bg-orange-50/50' : 'bg-gray-50'}`}>
+            <p className="text-xs font-bold text-gray-900">{slot.label}</p>
+            <p className="text-[10px] text-gray-400">{slot.start} – {slot.end}</p>
+          </div>
+        ))}
+      </div>
+
+      {DAYS.map(day => (
+        <div key={day} className={`grid grid-cols-[140px_repeat(auto-fit,minmax(150px,1fr))] border-b border-gray-100 last:border-0 min-h-[100px] ${day === todayName ? 'bg-indigo-50/30' : ''}`}>
+          <div className="p-4 border-r border-gray-100 flex flex-col justify-center items-center gap-1">
+             <span className={`text-sm font-bold ${day === todayName ? 'text-indigo-600' : 'text-gray-900'}`}>{day}</span>
+             {day === todayName && <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Today</span>}
+          </div>
+          {headerSlots.map(slot => (
+            <div key={slot.id} className={`p-3 border-r border-gray-100 last:border-0 ${slot.isBreak ? 'bg-orange-50/20' : ''}`}>
+              <div className="space-y-2">
+                {(lookup[day]?.[slot.id] || []).map((e, idx) => (
+                  <div key={idx} className={`rounded-xl p-3 border shadow-sm ${
+                    e.eventType === 'special' ? 'bg-amber-50 border-amber-200 text-amber-900'
+                    : e.date ? 'bg-teal-50 border-teal-200 text-teal-900'
+                    : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+                  }`}>
+                    <div className="flex justify-between items-start mb-1 gap-1">
+                       <p className="text-xs font-black truncate">{e.subject}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mb-1">
+                       {e.eventType === 'special' && <span className="text-[8px] bg-amber-200/50 px-1 rounded font-bold uppercase">{e.timeStart}–{e.timeEnd}</span>}
+                       <span className="text-[8px] opacity-70 font-bold uppercase">{e.courseLink || 'Class'}{e.sectionLink ? `:${e.sectionLink}` : ''}</span>
+                    </div>
+                    <p className="text-[9px] opacity-70 italic truncate">{e.teacher}</p>
+                  </div>
+                ))}
+                {!slot.isBreak && (!lookup[day]?.[slot.id] || lookup[day][slot.id].length === 0) && (
+                   <div className="h-full flex items-center justify-center opacity-10">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                   </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
